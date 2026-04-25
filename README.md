@@ -52,24 +52,24 @@ Exempel:
 
 ```bash
 ./fakturera_kund.sh 2026-04
-./fakturera_kund.sh 2026-04 MTO
+./fakturera_kund.sh 2026-04 AcmeCorp
 ```
 
 - `yyyy-mm` är obligatorisk period, t.ex. `2026-04`
-- `prefix` är valfritt och filtrerar på ämnesradens början, t.ex. `MTO`
+- `prefix` är valfritt och filtrerar på ämnesradens början, t.ex. `AcmeCorp`
 
 ## Manuell körning (felsökning)
 
 Testa datasteg 1 separat:
 
 ```bash
-python ics2tidrapport.py 2026-04 MTO
+python ics2tidrapport.py 2026-04 AcmeCorp
 ```
 
 Testa hela pipen manuellt:
 
 ```bash
-python ics2tidrapport.py 2026-04 MTO | python skapa_faktura_i_bokio.py
+python ics2tidrapport.py 2026-04 AcmeCorp | python skapa_faktura_i_bokio.py
 ```
 
 ## Vanliga fel
