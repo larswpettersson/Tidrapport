@@ -34,15 +34,15 @@ cp .env-example .env
 
 2. Fyll i värden i `.env`:
 
-- `KALENDER_URL` - publik eller delad ICS-lank till kalendern
-- `BOKIO_API_TOKEN` - token for Bokio API
-- `COMPANY_ID` - ditt foretags-id i Bokio
+- `KALENDER_URL` - publik eller delad ICS-länk till kalendern
+- `BOKIO_API_TOKEN` - token för Bokio API
+- `COMPANY_ID` - ditt företags-id i Bokio
 - `CUSTOMER_ID` - kund-id i Bokio
 - `TIMPRIS` - timpris per timme (standard 1200 om den saknas)
 
-## Anvandning
+## Användning
 
-Kor hela pipelinen:
+Kör hela pipelinen:
 
 ```bash
 ./fakturera_kund.sh <yyyy-mm> [prefix]
@@ -55,10 +55,10 @@ Exempel:
 ./fakturera_kund.sh 2026-04 MTO
 ```
 
-- `yyyy-mm` ar obligatorisk period, t.ex. `2026-04`
-- `prefix` ar valfritt och filtrerar pa amnesradens borjan, t.ex. `MTO`
+- `yyyy-mm` är obligatorisk period, t.ex. `2026-04`
+- `prefix` är valfritt och filtrerar på ämnesradens början, t.ex. `MTO`
 
-## Manuell korning (felsokning)
+## Manuell körning (felsökning)
 
 Testa datasteg 1 separat:
 
@@ -75,13 +75,13 @@ python ics2tidrapport.py 2026-04 MTO | python skapa_faktura_i_bokio.py
 ## Vanliga fel
 
 - `Fel: Ingen KALENDER_URL hittades i .env`
-  - Kontrollera att `.env` finns och att variabeln ar ifylld.
+  - Kontrollera att `.env` finns och att variabeln är ifylld.
 - `Ingen data att fakturera.`
   - Ingen kalenderdata matchade period/prefix.
 - `Fel vid API-anrop` eller `❌ Fel: ...`
-  - Kontrollera Bokio-token, company/customer-id och API-behorighet.
+  - Kontrollera Bokio-token, company/customer-id och API-behörighet.
 
-## Sakerhet
+## Säkerhet
 
 - `.env` ska inte committas (ligger i `.gitignore`).
 - Dela aldrig `BOKIO_API_TOKEN` publikt.
