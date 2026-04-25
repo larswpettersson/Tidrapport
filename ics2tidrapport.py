@@ -1,73 +1,73 @@
-import requests
+import os
 import sys
-from icalendar import Calendar
+import json
+import requests
 from datetime import datetime
-import collections
+from icalendar import Calendar
+from dotenv import load_dotenv
 
-def sammanstall_kalender(ics_url, year, month):
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(ics_url, headers=headers)
-        response.raise_for_status()
-    except Exception as e:
-        print(f"Fel vid hämtning av kalender: {e}")
-        print("Tips: Kontrollera att du använder .ics-länken och att den är inom citationstecken.")
+load_dotenv()
+
+def main():
+    # Hämta URL från .env som standard
+    source = os.getenv("KALENDER_URL")
+    
+    # Hantera argument: ics2tidrapport.py <yyyy-mm> [prefix]
+    if len(sys.argv) < 2:
+        print("Användning: python ics2tidrapport.py <yyyy-mm> [prefix]", file=sys.stderr)
         sys.exit(1)
 
-    gcal = Calendar.from_ical(response.content)
-    
-    dagliga_aktiviteter = collections.defaultdict(lambda: collections.defaultdict(float))
-    total_per_aktivitet = collections.defaultdict(float)
-    
-    for component in gcal.walk():
-        if component.name == "VEVENT":
-            summary = str(component.get('summary'))
+    target_month = sys.argv[1] # t.ex. "2026-04"
+    prefix = sys.argv[2] if len(sys.argv) > 2 else ""
+
+    if not source:
+        print("Fel: Ingen KALENDER_URL hittades i .env", file=sys.stderr)
+        sys.exit(1)
+
+    bearbetad_data_lista = []
+
+    try:
+        # Hämta kalenderdata (URL)
+        response = requests.get(source)
+        response.raise_for_status()
+        cal = Calendar.from_ical(response.content)
+
+        for component in cal.walk('vevent'):
+            ämne = str(component.get('summary'))
+            if not ämne or (prefix and not ämne.upper().startswith(prefix.upper())):
+                continue
+
             dtstart = component.get('dtstart').dt
             dtend = component.get('dtend').dt
-            
-            if isinstance(dtstart, datetime):
-                if dtstart.year == year and dtstart.month == month:
-                    duration = dtend - dtstart
-                    timmar = duration.total_seconds() / 3600
-                    datum_str = dtstart.strftime('%Y-%m-%d')
-                    
-                    dagliga_aktiviteter[datum_str][summary] += timmar
-                    total_per_aktivitet[summary] += timmar
-            
-    # 1. Daglig specifikation
-    print(f"\nDAGLIG SPECIFIKATION: {year}-{month:02d}")
-    print(f"{'Datum':<12} {'Timmar':<10} {'Projekt'}")
-    print("-" * 45)
-    
-    for datum in sorted(dagliga_aktiviteter.keys()):
-        for aktivitet, timmar in dagliga_aktiviteter[datum].items():
-            timmar_format = f"{round(timmar, 2):g}".replace('.', ',')
-            print(f"{datum:<12} {timmar_format + 'h':<10} {aktivitet}")
+            if not isinstance(dtstart, datetime): continue
 
-    # 2. Sammanställning per aktivitet
-    print(f"\nSAMMANSTÄLLNING PER AKTIVITET:")
-    print(f"{'Projekt':<23} {'Total tid'}")
-    print("-" * 45)
-    
-    total_manad = 0
-    for aktivitet in sorted(total_per_aktivitet.keys()):
-        timmar = total_per_aktivitet[aktivitet]
-        total_manad += timmar
-        timmar_format = f"{round(timmar, 2):g}".replace('.', ',')
-        print(f"{aktivitet:<23} {timmar_format}h")
-    
-    print("-" * 45)
-    # Här är ändringen du bad om
-    print(f"{'Totalt för månaden:':<23} {f'{round(total_manad, 2):g}'.replace('.', ',')}h\n")
+            start_month_str = dtstart.strftime('%Y-%m')
+            if start_month_str != target_month:
+                continue
+
+            duration_decimal = round((dtend - dtstart).total_seconds() / 3600.0, 2)
+            bearbetad_data_lista.append({
+                'Ämne': ämne,
+                'Startdatum': dtstart.strftime('%Y-%m-%d'),
+                'Duration_decimal': duration_decimal
+            })
+
+        # --- SMART OUTPUT ---
+        if sys.stdout.isatty():
+            # Tabellvisning för manuell körning
+            print(f"\n--- SAMMANSTÄLLNING FÖR {target_month} ---")
+            total = 0
+            for rad in sorted(bearbetad_data_lista, key=lambda x: x['Startdatum']):
+                print(f"{rad['Startdatum']} | {rad['Duration_decimal']}h | {rad['Ämne']}")
+                total += rad['Duration_decimal']
+            print(f"Totalt: {total}h\n")
+        else:
+            # JSON-output för pipen till nästa script
+            print(json.dumps(bearbetad_data_lista))
+
+    except Exception as e:
+        print(f"Ett fel uppstod: {e}", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        print("Användning: python ics2tidrapport.py \"<URL>\" <ÅR> <MÅNAD>")
-    else:
-        try:
-            url_arg = sys.argv[1]
-            year_arg = int(sys.argv[2])
-            month_arg = int(sys.argv[3])
-            sammanstall_kalender(url_arg, year_arg, month_arg)
-        except ValueError:
-            print("Fel: År och månad måste vara siffror.")
+    main()
