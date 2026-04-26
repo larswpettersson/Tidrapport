@@ -1,2 +1,4 @@
 outlook2toggl.py
 .env
+.env~
+*.txt

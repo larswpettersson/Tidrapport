@@ -9,6 +9,32 @@ Detta projekt tar tid från en ICS-kalender, filtrerar på period och valfritt k
 - `skapa_faktura_i_bokio.py` - läser JSON och skapar fakturautkast via Bokio API.
 - `.env-example` - mall för miljövariabler.
 
+## Hur skripten fungerar ihop
+
+Kedjan körs i denna ordning:
+
+1. `fakturera_kund.sh` tar emot period (`yyyy-mm`) och valfritt kundprefix och kopplar ihop stegen med en pipe.
+2. `ics2tidrapport.py` hämtar ICS-data från `KALENDER_URL` i `.env`, filtrerar på månad och prefix, och skickar resultatet som JSON till stdout.
+3. `skapa_faktura_i_bokio.py` läser JSON från stdin, grupperar/summerar tid, skapar fakturautkast i Bokio och skriver även ut en textfil för vidare export.
+
+Det innebär att du normalt bara behöver köra ett enda kommando:
+
+```bash
+./fakturera_kund.sh 2026-04 AcmeCorp
+```
+
+## Vad textfil-exporten används till
+
+När `skapa_faktura_i_bokio.py` körs skapas en textfil med namn i stil med:
+
+`Tidrapport_2026-04_AcmeCorp_YYYYMMDD_HHMM.txt`
+
+Textfilen innehåller veckovisa block (mån-sön) med aktiviteter och timmar per dag samt totalsumma. Den kan användas till:
+
+- underlag/bilaga till faktura
+- snabb inklistring i Excel eller ekonomisystem (t.ex. Agresso)
+- intern tiduppföljning och arkivering av vad som fakturerats
+
 ## Krav
 
 - Python 3
