@@ -130,13 +130,13 @@ Exempelbilder:
 Testa datasteg 1 separat:
 
 ```bash
-python ics2tidrapport.py 2026-04 AcmeCorp
+python ics2tidrapport.py 2026-04 ACME
 ```
 
 Testa hela pipen manuellt:
 
 ```bash
-python ics2tidrapport.py 2026-04 AcmeCorp | python skapa_faktura_i_bokio.py
+python ics2tidrapport.py 2026-04 ACME | python skapa_faktura_i_bokio.py
 ```
 
 ## Vanliga fel
