@@ -3,3 +3,4 @@ outlook2toggl.py
 .env~
 *.txt
 *.pdf
+.DS_Store
