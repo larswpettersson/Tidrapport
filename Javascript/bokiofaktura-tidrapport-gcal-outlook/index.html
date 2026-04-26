@@ -143,9 +143,13 @@
           <input
             id="bokioUrl"
             type="text"
-            placeholder="https://app.bokio.se/.../companies/<id>/.../customers/<id>"
+            placeholder="Klistra in URL fran Bokio, t.ex. .../invoicing/customers/view/<customer_id>"
           />
         </label>
+        <p class="help">
+          Tips: oppna kundvyn i Bokio, kopiera URL och klistra in har.
+          <a href="https://app.bokio.se/invoicing/customers" target="_blank" rel="noopener noreferrer">Oppna Bokio kunder</a>
+        </p>
         <button id="btnParseUrl" type="button">Extrahera ID fran lank</button>
         <p class="help">
           Token sparas inte i localStorage. Endast in-memory under sessionen.
@@ -417,19 +421,21 @@
             return;
           }
 
-          const companyMatch = url.match(/companies\/([^\/\?\#]+)/i);
-          const customerMatch = url.match(/customers\/([^\/\?\#]+)/i);
-          if (companyMatch && companyMatch[1]) el.companyIdInput.value = companyMatch[1];
-          if (customerMatch && customerMatch[1]) el.customerIdInput.value = customerMatch[1];
+          const parsed = extractIdsFromBokioUrl(url);
+          if (parsed.companyId) el.companyIdInput.value = parsed.companyId;
+          if (parsed.customerId) el.customerIdInput.value = parsed.customerId;
 
-          if (companyMatch || customerMatch) {
+          if (parsed.companyId || parsed.customerId) {
             setStatus(
               `Extraherat: COMPANY_ID=${el.companyIdInput.value || "-"}, CUSTOMER_ID=${
                 el.customerIdInput.value || "-"
               }`
             );
           } else {
-            setStatus("Kunde inte hitta company/customer-id i lankens path.");
+            setStatus(
+              "Kunde inte hitta company/customer-id i lankens path. Testa kunddetalj-URL: .../invoicing/customers/view/<customer_id>.",
+              "error"
+            );
           }
         }
 
@@ -539,6 +545,51 @@
           } catch (_err) {
             return null;
           }
+        }
+
+        function extractIdsFromBokioUrl(url) {
+          const result = { companyId: "", customerId: "" };
+          let path = "";
+
+          try {
+            path = new URL(url).pathname;
+          } catch (_err) {
+            path = url;
+          }
+
+          const segments = path.split("/").filter(Boolean);
+          if (segments.length === 0) return result;
+
+          const uuidRegex =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+          // Common Bokio format:
+          // /<companyId>/invoicing/customers/view/<customerId>
+          if (uuidRegex.test(segments[0])) {
+            result.companyId = segments[0];
+          }
+
+          const companiesIndex = segments.findIndex((x) => x.toLowerCase() === "companies");
+          if (companiesIndex >= 0 && segments[companiesIndex + 1]) {
+            result.companyId = segments[companiesIndex + 1];
+          }
+
+          const customersIndex = segments.findIndex((x) => x.toLowerCase() === "customers");
+          if (customersIndex >= 0 && segments[customersIndex + 1]) {
+            const next = segments[customersIndex + 1].toLowerCase();
+            if (next === "view" && segments[customersIndex + 2]) {
+              result.customerId = segments[customersIndex + 2];
+            } else if (next !== "new") {
+              result.customerId = segments[customersIndex + 1];
+            }
+          }
+
+          const viewIndex = segments.findIndex((x) => x.toLowerCase() === "view");
+          if (!result.customerId && viewIndex >= 0 && segments[viewIndex + 1]) {
+            result.customerId = segments[viewIndex + 1];
+          }
+
+          return result;
         }
 
         function formatDate(date) {
