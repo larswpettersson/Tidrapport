@@ -119,8 +119,8 @@
 
       <h1>Bokiofaktura med Tidrapport GCAL/Outlook</h1>
       <p class="intro">
-        Minimal frontend-MVP i en fil. Klistra in token, hamta bolag/kund om API:t
-        stodjer det, eller ange ID:n manuellt och skapa fakturautkast.
+        Minimal frontend-MVP i en fil. Klistra in token, extrahera ID från Bokio-länk
+        eller ange ID manuellt och skapa fakturautkast.
       </p>
 
       <section class="card">
@@ -138,6 +138,13 @@
             autocomplete="off"
           />
         </label>
+        <p class="help">
+          Token sparas inte i localStorage. Endast in-memory under sessionen.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>2) COMPANY_ID / CUSTOMER_ID</h2>
         <label>
           Bokio-lank (valfritt, for att auto-extrahera ID)
           <input
@@ -151,13 +158,6 @@
           <a href="https://app.bokio.se/invoicing/customers" target="_blank" rel="noopener noreferrer">Oppna Bokio kunder</a>
         </p>
         <button id="btnParseUrl" type="button">Extrahera ID fran lank</button>
-        <p class="help">
-          Token sparas inte i localStorage. Endast in-memory under sessionen.
-        </p>
-      </section>
-
-      <section class="card">
-        <h2>2) COMPANY_ID / CUSTOMER_ID</h2>
         <label>
           COMPANY_ID (manuell fallback)
           <input id="companyIdInput" type="text" placeholder="t.ex. 123456" />
@@ -166,41 +166,29 @@
           CUSTOMER_ID (manuell fallback)
           <input id="customerIdInput" type="text" placeholder="t.ex. 789012" />
         </label>
-
-        <div class="row">
-          <button id="btnLoadCompanies" type="button">loadCompanies()</button>
-          <select id="companySelect">
-            <option value="">Valj foretag...</option>
-          </select>
-        </div>
-        <div class="row">
-          <button id="btnLoadCustomers" type="button">
-            loadCustomers(companyId)
-          </button>
-          <select id="customerSelect">
-            <option value="">Valj kund...</option>
-          </select>
-        </div>
-        <p class="help">
-          Om list-endpoints saknas (404), anvand manuella ID-falt ovan.
-        </p>
       </section>
 
       <section class="card">
-        <h2>3) createInvoice(...)</h2>
+        <h2>3) Kör kalender -> faktura</h2>
         <label>
-          Fakturadatum
-          <input id="invoiceDate" type="date" />
+          Period (yyyy-mm)
+          <input id="yearMonth" type="text" placeholder="2026-04" />
         </label>
         <label>
-          Forfallodatum
-          <input id="dueDate" type="date" />
+          Prefix (valfritt, som i fakturera_kund.sh)
+          <input id="prefix" type="text" placeholder="ACME" />
         </label>
         <label>
-          Rader (JSON array)
-          <textarea id="lineItems" rows="8"></textarea>
+          KALENDER_URL (valfritt override)
+          <input
+            id="calendarUrl"
+            type="text"
+            placeholder="Lämna tom för Script Property KALENDER_URL"
+          />
         </label>
-        <button id="btnCreateInvoice" type="button">createInvoice(...)</button>
+        <button id="btnRunPipeline" type="button">
+          Kör pipeline (yyyy-mm + prefix)
+        </button>
       </section>
 
       <section id="status" class="card status" aria-live="polite">Klar.</section>
@@ -220,55 +208,23 @@
           bokioUrl: document.getElementById("bokioUrl"),
           companyIdInput: document.getElementById("companyIdInput"),
           customerIdInput: document.getElementById("customerIdInput"),
-          companySelect: document.getElementById("companySelect"),
-          customerSelect: document.getElementById("customerSelect"),
-          invoiceDate: document.getElementById("invoiceDate"),
-          dueDate: document.getElementById("dueDate"),
-          lineItems: document.getElementById("lineItems"),
+          yearMonth: document.getElementById("yearMonth"),
+          prefix: document.getElementById("prefix"),
+          calendarUrl: document.getElementById("calendarUrl"),
           status: document.getElementById("status"),
           flashStatus: document.getElementById("flashStatus"),
           corsFallback: document.getElementById("corsFallback"),
           corsMessage: document.getElementById("corsMessage"),
           curlExample: document.getElementById("curlExample"),
           btnParseUrl: document.getElementById("btnParseUrl"),
-          btnLoadCompanies: document.getElementById("btnLoadCompanies"),
-          btnLoadCustomers: document.getElementById("btnLoadCustomers"),
-          btnCreateInvoice: document.getElementById("btnCreateInvoice"),
+          btnRunPipeline: document.getElementById("btnRunPipeline"),
         };
 
         const now = new Date();
-        const due = new Date(now);
-        due.setDate(now.getDate() + 30);
-        el.invoiceDate.value = formatDate(now);
-        el.dueDate.value = formatDate(due);
-        el.lineItems.value = JSON.stringify(
-          [
-            {
-              description: "2026-04-15 AcmeCorp Konsulttjanster",
-              quantity: 8,
-              unit: "h",
-              unitPrice: 1200,
-              taxRate: 25.0,
-              productType: 0,
-              itemType: 0,
-            },
-          ],
-          null,
-          2
-        );
+        el.yearMonth.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
         el.btnParseUrl.addEventListener("click", parseIdsFromUrl);
-        el.btnLoadCompanies.addEventListener("click", () => loadCompanies());
-        el.btnLoadCustomers.addEventListener("click", () =>
-          loadCustomers(getCompanyId())
-        );
-        el.btnCreateInvoice.addEventListener("click", () => createInvoice());
-        el.companySelect.addEventListener("change", () => {
-          if (el.companySelect.value) el.companyIdInput.value = el.companySelect.value;
-        });
-        el.customerSelect.addEventListener("change", () => {
-          if (el.customerSelect.value) el.customerIdInput.value = el.customerSelect.value;
-        });
+        el.btnRunPipeline.addEventListener("click", () => runPipeline());
 
         function getConfig() {
           return {
@@ -278,186 +234,109 @@
         }
 
         function getCompanyId() {
-          return (el.companyIdInput.value.trim() || el.companySelect.value || "").trim();
+          return el.companyIdInput.value.trim();
         }
 
         function getCustomerId() {
-          return (el.customerIdInput.value.trim() || el.customerSelect.value || "").trim();
+          return el.customerIdInput.value.trim();
         }
 
-        async function bokioFetch(path, options) {
+        async function callGas(payload) {
           const { apiBase, token } = getConfig();
           if (!token) throw new Error("Saknar BOKIO_API_TOKEN.");
-          const method = options && options.method ? options.method : "GET";
-          const proxyMode = isAppsScriptProxy(apiBase);
+          if (!isAppsScriptProxy(apiBase)) {
+            throw new Error("Bokio API base måste vara en script.google.com/.../exec-länk.");
+          }
 
           try {
-            if (proxyMode) {
-              // Apps Script-friendly payload: avoid Authorization/custom headers to reduce CORS/preflight issues.
-              const proxyPayload = {
-                token: token,
-                method: method,
-                path: path,
-                body: options && options.body ? options.body : undefined,
-              };
-
-              const response = await fetch(apiBase, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "text/plain;charset=utf-8",
-                },
-                body: JSON.stringify(proxyPayload),
-              });
-
-              const text = await response.text();
-              const payload = safeJsonParse(text);
-              if (!payload) {
-                const err = new Error("Ogiltigt svar från Apps Script-proxy.");
-                err.code = "PROXY_ERROR";
-                err.path = path;
-                err.method = method;
-                err.body = proxyPayload;
-                throw err;
-              }
-
-              if (!payload.ok) {
-                const msg =
-                  (payload.body && (payload.body.message || payload.body.error)) ||
-                  payload.raw ||
-                  payload.error ||
-                  "Proxy/API-fel";
-                const err = new Error(`API-fel ${payload.status || ""}: ${msg}`);
-                err.code = "HTTP_ERROR";
-                err.status = payload.status || 500;
-                err.path = path;
-                err.method = method;
-                err.body = proxyPayload;
-                throw err;
-              }
-              return payload.body || {};
-            }
-
-            const requestInit = {
-              method: method,
+            const requestPayload = Object.assign({}, payload, { token: token });
+            const response = await fetch(apiBase, {
+              method: "POST",
               headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
+                "Content-Type": "text/plain;charset=utf-8",
               },
-            };
+              body: JSON.stringify(requestPayload),
+            });
 
-            if (options && options.body) {
-              requestInit.body = JSON.stringify(options.body);
-            }
-
-            const response = await fetch(`${apiBase}${path}`, requestInit);
             const text = await response.text();
-            const payload = safeJsonParse(text);
-            if (!response.ok) {
-              const err = new Error(
-                `API-fel ${response.status}: ${
-                  (payload && (payload.message || payload.error)) || text || "Okant fel"
-                }`
-              );
-              err.code = "HTTP_ERROR";
-              err.status = response.status;
-              err.path = path;
-              err.method = method;
-              err.body = options && options.body ? options.body : null;
+            const parsed = safeJsonParse(text);
+            if (!parsed) {
+              const err = new Error("Ogiltigt svar från Apps Script.");
+              err.code = "PROXY_ERROR";
+              err.body = requestPayload;
               throw err;
             }
-            return payload || {};
+
+            if (!parsed.ok) {
+              const msg =
+                (parsed.body && (parsed.body.message || parsed.body.error)) ||
+                parsed.raw ||
+                parsed.error ||
+                "Proxy/API-fel";
+              const err = new Error(`API-fel ${parsed.status || ""}: ${msg}`);
+              err.code = "HTTP_ERROR";
+              err.status = parsed.status || 500;
+              err.body = requestPayload;
+              throw err;
+            }
+
+            return parsed.body || {};
           } catch (error) {
             if (error instanceof TypeError) {
               const corsErr = new Error("Direktanrop blockerat (trolig CORS).");
               corsErr.code = "CORS_BLOCKED";
-              corsErr.path = path;
-              corsErr.method = method;
-              corsErr.body = options && options.body ? options.body : null;
-              corsErr.proxyMode = proxyMode;
+              corsErr.method = "POST";
+              corsErr.body = payload || null;
               throw corsErr;
             }
             throw error;
           }
         }
 
-        async function loadCompanies() {
-          clearCorsFallback();
-          setStatus("Laddar foretag...");
-          try {
-            const payload = await bokioFetch("/companies");
-            const companies = normalizeCompanies(payload);
-            fillSelect(el.companySelect, companies, "Valj foretag...");
-            if (companies.length > 0) el.companyIdInput.value = companies[0].id;
-            setStatus(`Hamtade ${companies.length} foretag.`);
-          } catch (error) {
-            handleError(error, null, null, "companies");
-          }
-        }
-
-        async function loadCustomers(companyId) {
-          clearCorsFallback();
-          if (!companyId) {
-            setStatus("Ange eller valj COMPANY_ID innan loadCustomers(companyId).");
-            return;
-          }
-          setStatus(`Laddar kunder for COMPANY_ID=${companyId}...`);
-          try {
-            const payload = await bokioFetch(`/companies/${companyId}/customers`);
-            const customers = normalizeCustomers(payload);
-            fillSelect(el.customerSelect, customers, "Valj kund...");
-            if (customers.length > 0) el.customerIdInput.value = customers[0].id;
-            setStatus(`Hamtade ${customers.length} kunder.`);
-          } catch (error) {
-            handleError(error, null, companyId, "customers");
-          }
-        }
-
-        async function createInvoice() {
+        async function runPipeline() {
           clearCorsFallback();
           const companyId = getCompanyId();
           const customerId = getCustomerId();
           if (!companyId || !customerId) {
-            setStatus("Ange COMPANY_ID och CUSTOMER_ID innan createInvoice(...).");
+            setStatus("Ange COMPANY_ID och CUSTOMER_ID innan körning.", "error");
             return;
           }
 
-          let lineItems;
-          try {
-            lineItems = JSON.parse(el.lineItems.value);
-            if (!Array.isArray(lineItems) || lineItems.length === 0) {
-              throw new Error("lineItems maste vara en icke-tom JSON-array.");
-            }
-          } catch (error) {
-            setStatus(`Fel i lineItems JSON: ${error.message}`);
+          const yearMonth = (el.yearMonth.value || "").trim();
+          if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
+            setStatus("Period måste vara i format yyyy-mm, t.ex. 2026-04.", "error");
             return;
           }
+
+          const prefix = (el.prefix.value || "").trim();
+          const calendarUrl = (el.calendarUrl.value || "").trim();
 
           const payload = {
+            action: "runPipeline",
+            yearMonth: yearMonth,
+            prefix: prefix,
+            calendarUrl: calendarUrl || undefined,
+            companyId: companyId,
             customerId: customerId,
-            invoiceDate: el.invoiceDate.value || formatDate(new Date()),
-            dueDate: el.dueDate.value || formatDate(new Date()),
-            currency: "SEK",
-            lineItems: lineItems,
-            footerText: "Demo från Bokiofaktura med Tidrapport GCAL/Outlook",
           };
 
-          setStatus("Skapar fakturautkast...");
+          setStatus("Kör pipeline (kalender -> fakturautkast)...");
           try {
-            const result = await bokioFetch(`/companies/${companyId}/invoices`, {
-              method: "POST",
-              body: payload,
-            });
+            const result = await callGas(payload);
             setStatus(
               [
                 "Fakturautkast skapat.",
+                `Period: ${yearMonth}`,
+                `Prefix: ${prefix || "-"}`,
                 `Company ID: ${companyId}`,
                 `Customer ID: ${customerId}`,
-                `Response: ${JSON.stringify(result, null, 2)}`,
+                "",
+                `JSON-svar: ${JSON.stringify(result, null, 2)}`,
               ].join("\n"),
               "success"
             );
           } catch (error) {
-            handleError(error, payload, companyId, "invoice");
+            handleError(error, payload, companyId, "pipeline");
           }
         }
 
@@ -493,49 +372,25 @@
             return;
           }
 
-          if (error && error.code === "HTTP_ERROR" && error.status === 404) {
-            if (phase === "companies" || phase === "customers") {
-              setStatus(
-                "List-endpoint verkar saknas (404). Anvand manuella COMPANY_ID/CUSTOMER_ID och kor createInvoice(...)."
-              , "error");
-              return;
-            }
-          }
           setStatus((error && error.message) || "Okant fel.", "error");
         }
 
         function showCorsFallback(error, body, companyId) {
           const { apiBase } = getConfig();
-          const path = error.path || (companyId ? `/companies/${companyId}/invoices` : "/companies");
-          const method = error.method || "GET";
-          let curl = "";
-
-          if (isAppsScriptProxy(apiBase)) {
-            const proxyBody = error.body || {
-              token: "<DIN_TOKEN>",
-              method: method,
-              path: path,
-              body: body || null,
-            };
-            curl = [
-              "curl -X POST \\",
-              `  "${apiBase}" \\`,
-              '  -H "Content-Type: text/plain;charset=utf-8" \\',
-              `  -d '${JSON.stringify(proxyBody)}'`,
-            ].join("\n");
-          } else {
-            const curlBody = body || error.body;
-            const bodyString = curlBody ? `-d '${JSON.stringify(curlBody)}'` : "";
-            curl = [
-              `curl -X ${method} \\`,
-              `  "${apiBase}${path}" \\`,
-              `  -H "Authorization: Bearer <DIN_TOKEN>" \\`,
-              `  -H "Content-Type: application/json" \\`,
-              bodyString,
-            ]
-              .filter(Boolean)
-              .join("\n");
-          }
+          const proxyBody = error.body || body || {
+            action: "runPipeline",
+            token: "<DIN_TOKEN>",
+            yearMonth: "2026-04",
+            prefix: "ACME",
+            companyId: "<COMPANY_ID>",
+            customerId: "<CUSTOMER_ID>",
+          };
+          const curl = [
+            "curl -X POST \\",
+            `  "${apiBase}" \\`,
+            '  -H "Content-Type: text/plain;charset=utf-8" \\',
+            `  -d '${JSON.stringify(proxyBody)}'`,
+          ].join("\n");
 
           el.corsMessage.textContent =
             "Detta ser ut som en CORS-blockering. For demo: verifiera anropet med curl eller en lokal proxy.";
@@ -552,54 +407,16 @@
         function setStatus(text, level) {
           const tone = level || "info";
           el.status.textContent = text;
-          el.flashStatus.textContent = text;
-          el.flashStatus.className = `toast ${tone}`;
-          el.flashStatus.classList.remove("hidden");
-        }
 
-        function fillSelect(selectEl, items, placeholder) {
-          selectEl.innerHTML = "";
-          const first = document.createElement("option");
-          first.value = "";
-          first.textContent = placeholder;
-          selectEl.appendChild(first);
-
-          items.forEach((item) => {
-            const option = document.createElement("option");
-            option.value = item.id;
-            option.textContent = `${item.name} (${item.id})`;
-            selectEl.appendChild(option);
-          });
-        }
-
-        function normalizeCompanies(payload) {
-          const list =
-            (Array.isArray(payload) && payload) ||
-            payload.companies ||
-            payload.data ||
-            payload.items ||
-            [];
-          return list
-            .map((x) => ({
-              id: String(x.id || x.companyId || x.companyID || ""),
-              name: x.name || x.companyName || "Okant foretag",
-            }))
-            .filter((x) => x.id);
-        }
-
-        function normalizeCustomers(payload) {
-          const list =
-            (Array.isArray(payload) && payload) ||
-            payload.customers ||
-            payload.data ||
-            payload.items ||
-            [];
-          return list
-            .map((x) => ({
-              id: String(x.id || x.customerId || x.customerID || ""),
-              name: x.name || x.customerName || "Okand kund",
-            }))
-            .filter((x) => x.id);
+          // Keep the top sticky banner for errors only.
+          if (tone === "error") {
+            el.flashStatus.textContent = text;
+            el.flashStatus.className = `toast ${tone}`;
+            el.flashStatus.classList.remove("hidden");
+          } else {
+            el.flashStatus.classList.add("hidden");
+            el.flashStatus.textContent = "";
+          }
         }
 
         function safeJsonParse(text) {
@@ -660,16 +477,7 @@
           return result;
         }
 
-        function formatDate(date) {
-          const yyyy = date.getFullYear();
-          const mm = String(date.getMonth() + 1).padStart(2, "0");
-          const dd = String(date.getDate()).padStart(2, "0");
-          return `${yyyy}-${mm}-${dd}`;
-        }
-
-        window.loadCompanies = loadCompanies;
-        window.loadCustomers = loadCustomers;
-        window.createInvoice = createInvoice;
+        window.runPipeline = runPipeline;
       })();
     </script>
   </body>
