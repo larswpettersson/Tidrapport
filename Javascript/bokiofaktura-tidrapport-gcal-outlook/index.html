@@ -183,8 +183,13 @@
           <input
             id="calendarUrl"
             type="text"
+            value="https://calendar.google.com/calendar/ical/c_537c29e9c2b1c853311549853f4aa1f195978d6edb746871e9bf85ade0e1c191%40group.calendar.google.com/public/basic.ics"
             placeholder="Lämna tom för Script Property KALENDER_URL"
           />
+        </label>
+        <label>
+          TIMPRIS
+          <input id="timpris" type="number" min="1" step="1" value="1200" />
         </label>
         <button id="btnRunPipeline" type="button">
           Kör pipeline (yyyy-mm + prefix)
@@ -211,6 +216,7 @@
           yearMonth: document.getElementById("yearMonth"),
           prefix: document.getElementById("prefix"),
           calendarUrl: document.getElementById("calendarUrl"),
+          timpris: document.getElementById("timpris"),
           status: document.getElementById("status"),
           flashStatus: document.getElementById("flashStatus"),
           corsFallback: document.getElementById("corsFallback"),
@@ -310,12 +316,18 @@
 
           const prefix = (el.prefix.value || "").trim();
           const calendarUrl = (el.calendarUrl.value || "").trim();
+          const timpris = Number((el.timpris.value || "").trim());
+          if (!timpris || timpris <= 0) {
+            setStatus("TIMPRIS måste vara ett positivt tal.", "error");
+            return;
+          }
 
           const payload = {
             action: "runPipeline",
             yearMonth: yearMonth,
             prefix: prefix,
             calendarUrl: calendarUrl || undefined,
+            timpris: timpris,
             companyId: companyId,
             customerId: customerId,
           };
