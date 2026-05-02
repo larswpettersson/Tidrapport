@@ -157,7 +157,7 @@
         </ol>
         <label>
           Bokio API base
-          <input id="apiBase" type="text" value="https://script.google.com/macros/s/AKfycbwwmUvAS9yeo0ffIWpqv7ZmNMYLmyzvQcfnOEQ_X1TaSj1Ofy7jAm2mALjGnLuVZTVU/exec" />
+          <input id="apiBase" type="text" value="https://script.google.com/macros/s/AKfycbxnlQ6xaMU5xGhI-9PZhu5HzGvHpmzm1lKm-KCrWwx2EHODtY9xUg6MNmVYzNdz5STl/exec" />
         </label>
         <label>
           BOKIO_API_TOKEN
@@ -262,8 +262,7 @@
           btnRunPipeline: document.getElementById("btnRunPipeline"),
         };
 
-        const now = new Date();
-        el.yearMonth.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        el.yearMonth.value = "2026-04";
 
         el.btnParseUrl.addEventListener("click", parseIdsFromUrl);
         el.btnRunPipeline.addEventListener("click", () => runPipeline());
@@ -378,11 +377,8 @@
           const companyId = getCompanyId();
           const customerId = getCustomerId();
 
-          const yearMonth = (el.yearMonth.value || "").trim();
-          if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
-            setStatus("Period måste vara i format yyyy-mm, t.ex. 2026-04.", "error");
-            return;
-          }
+          const yearMonth = "2026-04";
+          el.yearMonth.value = yearMonth;
 
           const prefix = (el.prefix.value || "").trim();
           const calendarUrl = (el.calendarUrl.value || "").trim();
