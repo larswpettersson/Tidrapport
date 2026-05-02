@@ -321,14 +321,56 @@
             return parsed.body || {};
           } catch (error) {
             if (error instanceof TypeError) {
-              const corsErr = new Error("Direktanrop blockerat (trolig CORS).");
-              corsErr.code = "CORS_BLOCKED";
-              corsErr.method = "GET";
-              corsErr.body = payload || null;
-              throw corsErr;
+              const requestPayload = Object.assign({}, payload);
+              if (token && allowInsecureTokenForward) requestPayload.token = token;
+              return callGasJsonp(apiBase, requestPayload);
             }
             throw error;
           }
+        }
+
+        function callGasJsonp(apiBase, requestPayload) {
+          return new Promise((resolve, reject) => {
+            const callbackName = `__gasJsonpCb_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+            const cleanup = () => {
+              if (script.parentNode) script.parentNode.removeChild(script);
+              delete window[callbackName];
+            };
+            const script = document.createElement("script");
+            const timeout = setTimeout(() => {
+              cleanup();
+              reject(new Error("Timeout i JSONP-fallback mot Apps Script."));
+            }, 15000);
+
+            window[callbackName] = (response) => {
+              clearTimeout(timeout);
+              cleanup();
+              if (!response || typeof response !== "object") {
+                reject(new Error("Ogiltigt JSONP-svar från Apps Script."));
+                return;
+              }
+              if (!response.ok) {
+                const msg =
+                  (response.body && (response.body.message || response.body.error)) ||
+                  response.error ||
+                  "Proxy/API-fel";
+                reject(new Error(`API-fel ${response.status || ""}: ${msg}`));
+                return;
+              }
+              resolve(response.body || {});
+            };
+
+            const params = new URLSearchParams(cleanObject(requestPayload));
+            params.set("callback", callbackName);
+            script.src = `${apiBase}?${params.toString()}`;
+            script.async = true;
+            script.onerror = () => {
+              clearTimeout(timeout);
+              cleanup();
+              reject(new Error("JSONP-fallback misslyckades att ladda script."));
+            };
+            document.body.appendChild(script);
+          });
         }
 
         async function runPipeline() {

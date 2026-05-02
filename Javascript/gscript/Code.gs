@@ -44,6 +44,7 @@ function parseGetRequest(e) {
     customerId: params.customerId,
     calendarUrl: params.calendarUrl,
     timpris: params.timpris,
+    callback: params.callback,
   };
 
   // Optional compact mode: payload=<JSON-string>
@@ -59,12 +60,17 @@ function parseGetRequest(e) {
 
 function handleRequest(req) {
   var action = String((req && req.action) || "").trim();
+  var callback = getJsonpCallbackName(req && req.callback);
   if (action !== "runPipeline") {
-    return jsonResponse(400, { error: "Unsupported action. Use action=runPipeline." });
+    return jsonResponse(
+      400,
+      { error: "Unsupported action. Use action=runPipeline." },
+      callback
+    );
   }
 
   var result = runPipeline(req || {});
-  return jsonResponse(200, result);
+  return jsonResponse(200, result, callback);
 }
 
 function runPipeline(req) {
@@ -410,13 +416,22 @@ function tryParseJson(text) {
   }
 }
 
-function jsonResponse(status, payload) {
+function jsonResponse(status, payload, callback) {
   var out = {
     ok: status >= 200 && status < 300,
     status: status,
     body: payload,
   };
-  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(
-    ContentService.MimeType.JSON
-  );
+  if (callback) {
+    var body = callback + "(" + JSON.stringify(out) + ");";
+    return ContentService.createTextOutput(body).setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function getJsonpCallbackName(rawName) {
+  var name = String(rawName || "").trim();
+  if (!name) return "";
+  if (!/^[A-Za-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)*$/.test(name)) return "";
+  return name;
 }

@@ -69,6 +69,12 @@ ALLOW_TOKEN_FROM_REQUEST=true
 
 Then `token` in request is accepted. This is less secure in GET flows because query strings can be logged.
 
+## JSONP fallback for browser CORS
+
+The frontend (`Javascript/bokiofaktura-tidrapport-gcal-outlook/index.html`) now includes a JSONP fallback for cases where standard browser `fetch` is blocked by CORS.
+
+To enable this, deploy the updated `Code.gs` from this folder so your `/exec` endpoint supports `callback=<functionName>` in GET and returns `callback({...})`.
+
 ## Dry-run behavior
 
 If `companyId` or `customerId` is missing, pipeline runs in `dryRun` mode:
